@@ -1,0 +1,65 @@
+# Local development services for Airsonic-Pulse (used by the "Airsonic (dev)" run configuration).
+#
+#   docker compose -f dev/docker-compose.yml up -d
+#
+# Airsonic DB:  jdbc:postgresql://localhost:5432/airsonic?stringtype=unspecified  (airsonic / airsonic)
+# Keycloak:     http://localhost:8180  (admin / admin), realm "airsonic"
+# DEVELOPMENT ONLY - all credentials below are throwaway.
+name: airsonic-dev
+
+services:
+  airsonic-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: airsonic
+      POSTGRES_USER: airsonic
+      POSTGRES_PASSWORD: airsonic
+    ports:
+      - "5432:5432"
+    volumes:
+      - airsonic-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airsonic -d airsonic"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  keycloak-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The issuer must be identical for the browser and for Airsonic running on the host.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/airsonic-realm.json:/opt/keycloak/data/import/airsonic-realm.json:ro
+
+volumes:
+  airsonic-db-data:
+  keycloak-db-data:

@@ -10,6 +10,7 @@
   - [Lyrics](./webui/lyrics.md)
 - [Configuration](./configuration/README.md)
   - [Detail Configuration](./configuration/detail.md)
+  - [OpenID Connect (OIDC) single sign-on](./configuration/oidc.md)
 - Proxy
   - [Prerequisites](./proxy/README.md)
   - [Apache](./proxy/apache.md)

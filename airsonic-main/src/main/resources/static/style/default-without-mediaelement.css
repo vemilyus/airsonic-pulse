@@ -457,6 +457,7 @@ img {
     white-space: nowrap;
     font-size: 90%;
     line-height: 1.25em;
+    margin: 1em !important;
 }
 
 .songTitle {

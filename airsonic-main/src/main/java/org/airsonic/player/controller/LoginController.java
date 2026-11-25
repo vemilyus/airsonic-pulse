@@ -1,5 +1,7 @@
 package org.airsonic.player.controller;
 
+import org.airsonic.player.security.OidcClientRegistrationHolder;
+import org.airsonic.player.security.OidcSecurityConfig;
 import org.airsonic.player.service.SecurityService;
 import org.airsonic.player.service.SettingsService;
 import org.airsonic.player.service.VersionService;
@@ -31,6 +33,8 @@ public class LoginController {
     private SettingsService settingsService;
     @Autowired
     private VersionService versionService;
+    @Autowired
+    private OidcClientRegistrationHolder oidcClientRegistrations;
 
     @GetMapping
     public ModelAndView login(HttpServletRequest request, HttpServletResponse response) {
@@ -52,6 +56,15 @@ public class LoginController {
         map.put("error", request.getParameter("error") != null);
         map.put("brand", settingsService.getBrand());
         map.put("loginMessage", settingsService.getLoginMessage());
+
+        // The SSO button is only offered when OIDC is really active (enabled, configured and the
+        // provider was reachable at startup), not merely switched on in the settings.
+        boolean oidcActive = oidcClientRegistrations.isAvailable();
+        map.put("oidcEnabled", oidcActive);
+        if (oidcActive) {
+            map.put("oidcLabel", settingsService.getOidcButtonLabel());
+            map.put("oidcUrl", OidcSecurityConfig.AUTHORIZATION_BASE_URI + "/" + OidcSecurityConfig.REGISTRATION_ID);
+        }
 
         // Version under the logo, gated by the admin-only toggle. The display version already
         // embeds the build timestamp, so no separate build date is exposed. Read here rather

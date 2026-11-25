@@ -60,9 +60,13 @@
 
 <form method="post" th:action="@{/userSettings.view}" th:object="${command}">
         <table>
-            <tr th:style="*{currentUser ? 'display:none' : ''}">
-                <td><input type="checkbox" th:field="*{adminRole}" class="checkbox"/></td>
-                <td><label th:for="${#ids.prev('adminRole')}" th:text="#{usersettings.admin}"></label></td>
+            <tr>
+                <td><input type="checkbox" th:field="*{adminRole}" class="checkbox"
+                           th:attr="onclick=*{currentUser ? 'return false;' : null},style=*{currentUser ? 'opacity:0.6' : null}"/></td>
+                <td>
+                    <label th:for="${#ids.prev('adminRole')}" th:text="#{usersettings.admin}"></label>
+                    <th:block th:if="*{currentUser}"><th:block th:replace="~{helpToolTip(topic=adminlocked)}" /></th:block>
+                </td>
                 <td class="warning"><form:errors path="adminRole"/></td>
             </tr>
             <tr>
@@ -208,6 +212,28 @@
                 <td th:text="#{usersettings.email}"></td>
                 <td><input th:field="*{email}" style="width:20em"/></td>
                 <td class="warning" th:errors="*{email}"></td>
+            </tr>
+        </table>
+    </th:block>
+
+    <th:block th:if="*{oidcEnabled or !#maps.isEmpty(oidcLinks)}">
+        <table id="oidcRemoveLinkTable" class="indent">
+            <tr>
+                <th colspan="3" style="text-align:left" th:text="#{usersettings.oidc}"></th>
+            </tr>
+            <tr th:each="link : *{oidcLinks}">
+                <td><input type="checkbox" name="oidcRemoveIds" th:id="|oidcRemove${link.key}|" th:value="${link.key}" class="checkbox"/></td>
+                <td><label th:for="|oidcRemove${link.key}|" th:text="|#{usersettings.oidcremove}: ${link.value}|"></label></td>
+            </tr>
+        </table>
+        <table id="oidcLinkTable" class="indent">
+            <tr th:if="*{oidcEnabled}">
+                <td th:text="#{usersettings.oidcsubject}"></td>
+                <td>
+                    <input th:field="*{oidcSubject}" style="width:25em"/>
+                    <th:block th:replace="~{helpToolTip((topic=oidcprelink))}" />
+                </td>
+                <td class="warning" th:errors="*{oidcSubject}"></td>
             </tr>
         </table>
     </th:block>

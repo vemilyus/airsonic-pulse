@@ -52,6 +52,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
+
 /**
  * Provides persistent storage of application settings and preferences.
  *
@@ -115,6 +117,19 @@ public class SettingsService {
     private static final String KEY_LDAP_MANAGER_PASSWORD = "LdapManagerPassword";
     private static final String KEY_LDAP_SEARCH_FILTER = "LdapSearchFilter";
     private static final String KEY_LDAP_AUTO_SHADOWING = "LdapAutoShadowing";
+    private static final String KEY_OIDC_ENABLED = "OidcEnabled";
+    private static final String KEY_OIDC_ISSUER_URI = "OidcIssuerUri";
+    private static final String KEY_OIDC_CLIENT_ID = "OidcClientId";
+    private static final String KEY_OIDC_CLIENT_SECRET = "OidcClientSecret";
+    private static final String KEY_OIDC_SCOPES = "OidcScopes";
+    private static final String KEY_OIDC_USERNAME_CLAIM = "OidcUsernameClaim";
+    private static final String KEY_OIDC_GROUPS_CLAIM = "OidcGroupsClaim";
+    private static final String KEY_OIDC_ADMIN_GROUP = "OidcAdminGroup";
+    private static final String KEY_OIDC_REQUIRED_CLAIM = "OidcRequiredClaim";
+    private static final String KEY_OIDC_REQUIRED_CLAIM_VALUE = "OidcRequiredClaimValue";
+    private static final String KEY_OIDC_BUTTON_LABEL = "OidcButtonLabel";
+    private static final String KEY_OIDC_AUTO_CREATE_USERS = "OidcAutoCreateUsers";
+    private static final String KEY_OIDC_LINK_BY_EMAIL = "OidcLinkByEmail";
     private static final String KEY_GETTING_STARTED_ENABLED = "GettingStartedEnabled";
     private static final String KEY_SETTINGS_CHANGED = "SettingsChanged";
     private static final String KEY_ORGANIZE_BY_FOLDER_STRUCTURE = "OrganizeByFolderStructure";
@@ -223,6 +238,19 @@ public class SettingsService {
     private static final String DEFAULT_LDAP_MANAGER_PASSWORD = null;
     private static final String DEFAULT_LDAP_SEARCH_FILTER = "(sAMAccountName={0})";
     private static final boolean DEFAULT_LDAP_AUTO_SHADOWING = false;
+    private static final boolean DEFAULT_OIDC_ENABLED = false;
+    private static final String DEFAULT_OIDC_ISSUER_URI = null;
+    private static final String DEFAULT_OIDC_CLIENT_ID = null;
+    private static final String DEFAULT_OIDC_CLIENT_SECRET = null;
+    private static final String DEFAULT_OIDC_SCOPES = "openid profile email";
+    private static final String DEFAULT_OIDC_USERNAME_CLAIM = "preferred_username";
+    private static final String DEFAULT_OIDC_GROUPS_CLAIM = "";
+    private static final String DEFAULT_OIDC_ADMIN_GROUP = "";
+    private static final String DEFAULT_OIDC_REQUIRED_CLAIM = "";
+    private static final String DEFAULT_OIDC_REQUIRED_CLAIM_VALUE = "";
+    private static final String DEFAULT_OIDC_BUTTON_LABEL = "SSO";
+    private static final boolean DEFAULT_OIDC_AUTO_CREATE_USERS = false;
+    private static final boolean DEFAULT_OIDC_LINK_BY_EMAIL = false;
     private static final boolean DEFAULT_GETTING_STARTED_ENABLED = true;
     private static final long DEFAULT_SETTINGS_CHANGED = 0L;
     private static final boolean DEFAULT_ORGANIZE_BY_FOLDER_STRUCTURE = true;
@@ -337,7 +365,7 @@ public class SettingsService {
                 // we're not migrating to null, i.e. trying to delete the property
                 .filter(e -> e.getValue() != null)
                 // ps has the property we're trying to migrate (either directly or migrated earlier within the chain)
-                .filter(e -> StringUtils.isNotBlank(Optional.ofNullable(src.getProperty(e.getKey())).map(Object::toString).orElse(temp.getOrDefault(e.getKey(), "").toString())))
+                .filter(e -> isNotBlank(Optional.ofNullable(src.getProperty(e.getKey())).map(Object::toString).orElse(temp.getOrDefault(e.getKey(), "").toString())))
                 // we're not migrating to a property that is already occupied
                 .filter(e -> StringUtils.isBlank(Optional.ofNullable(src.getProperty(e.getValue())).map(Object::toString).orElse(temp.getOrDefault(e.getValue(), "").toString())))
                 .forEach(e -> {
@@ -1163,6 +1191,135 @@ public class SettingsService {
         setBoolean(KEY_LDAP_AUTO_SHADOWING, ldapAutoShadowing);
     }
 
+    public boolean isOidcEnabled() {
+        return getBoolean(KEY_OIDC_ENABLED, DEFAULT_OIDC_ENABLED);
+    }
+
+    public void setOidcEnabled(boolean oidcEnabled) {
+        setBoolean(KEY_OIDC_ENABLED, oidcEnabled);
+    }
+
+    public String getOidcIssuerUri() {
+        return getProperty(KEY_OIDC_ISSUER_URI, DEFAULT_OIDC_ISSUER_URI);
+    }
+
+    public void setOidcIssuerUri(String oidcIssuerUri) {
+        setProperty(KEY_OIDC_ISSUER_URI, oidcIssuerUri);
+    }
+
+    public String getOidcClientId() {
+        return getProperty(KEY_OIDC_CLIENT_ID, DEFAULT_OIDC_CLIENT_ID);
+    }
+
+    public void setOidcClientId(String oidcClientId) {
+        setProperty(KEY_OIDC_CLIENT_ID, oidcClientId);
+    }
+
+    public String getOidcClientSecret() {
+        String s = getProperty(KEY_OIDC_CLIENT_SECRET, DEFAULT_OIDC_CLIENT_SECRET);
+        if (s == null) {
+            return null;
+        }
+        try {
+            return StringUtil.utf8HexDecode(s);
+        } catch (Exception x) {
+            LOG.warn("Failed to decode OIDC client secret.", x);
+            return s;
+        }
+    }
+
+    public void setOidcClientSecret(String oidcClientSecret) {
+        if (oidcClientSecret != null) {
+            try {
+                oidcClientSecret = StringUtil.utf8HexEncode(oidcClientSecret);
+            } catch (Exception x) {
+                LOG.warn("Failed to encode OIDC client secret.", x);
+            }
+        }
+        setProperty(KEY_OIDC_CLIENT_SECRET, oidcClientSecret);
+    }
+
+    public String getOidcScopes() {
+        return getProperty(KEY_OIDC_SCOPES, DEFAULT_OIDC_SCOPES);
+    }
+
+    public void setOidcScopes(String oidcScopes) {
+        setProperty(KEY_OIDC_SCOPES, oidcScopes);
+    }
+
+    public String getOidcUsernameClaim() {
+        return getProperty(KEY_OIDC_USERNAME_CLAIM, DEFAULT_OIDC_USERNAME_CLAIM);
+    }
+
+    public void setOidcUsernameClaim(String oidcUsernameClaim) {
+        setProperty(KEY_OIDC_USERNAME_CLAIM, oidcUsernameClaim);
+    }
+
+    public String getOidcGroupsClaim() {
+        return getProperty(KEY_OIDC_GROUPS_CLAIM, DEFAULT_OIDC_GROUPS_CLAIM);
+    }
+
+    public void setOidcGroupsClaim(String oidcGroupsClaim) {
+        setProperty(KEY_OIDC_GROUPS_CLAIM, oidcGroupsClaim);
+    }
+
+    public String getOidcAdminGroup() {
+        return getProperty(KEY_OIDC_ADMIN_GROUP, DEFAULT_OIDC_ADMIN_GROUP);
+    }
+
+    public void setOidcAdminGroup(String oidcAdminGroup) {
+        setProperty(KEY_OIDC_ADMIN_GROUP, oidcAdminGroup);
+    }
+
+    public String getOidcRequiredClaim() {
+        return getProperty(KEY_OIDC_REQUIRED_CLAIM, DEFAULT_OIDC_REQUIRED_CLAIM);
+    }
+
+    public void setOidcRequiredClaim(String oidcRequiredClaim) {
+        setProperty(KEY_OIDC_REQUIRED_CLAIM, oidcRequiredClaim);
+    }
+
+    public String getOidcRequiredClaimValue() {
+        return getProperty(KEY_OIDC_REQUIRED_CLAIM_VALUE, DEFAULT_OIDC_REQUIRED_CLAIM_VALUE);
+    }
+
+    public void setOidcRequiredClaimValue(String oidcRequiredClaimValue) {
+        setProperty(KEY_OIDC_REQUIRED_CLAIM_VALUE, oidcRequiredClaimValue);
+    }
+
+    public String getOidcButtonLabel() {
+        return getProperty(KEY_OIDC_BUTTON_LABEL, DEFAULT_OIDC_BUTTON_LABEL);
+    }
+
+    public void setOidcButtonLabel(String oidcButtonLabel) {
+        setProperty(KEY_OIDC_BUTTON_LABEL, oidcButtonLabel);
+    }
+
+    public boolean isOidcAutoCreateUsers() {
+        return getBoolean(KEY_OIDC_AUTO_CREATE_USERS, DEFAULT_OIDC_AUTO_CREATE_USERS);
+    }
+
+    public void setOidcAutoCreateUsers(boolean oidcAutoCreateUsers) {
+        setBoolean(KEY_OIDC_AUTO_CREATE_USERS, oidcAutoCreateUsers);
+    }
+
+    public boolean isOidcLinkByEmail() {
+        return getBoolean(KEY_OIDC_LINK_BY_EMAIL, DEFAULT_OIDC_LINK_BY_EMAIL);
+    }
+
+    public void setOidcLinkByEmail(boolean oidcLinkByEmail) {
+        setBoolean(KEY_OIDC_LINK_BY_EMAIL, oidcLinkByEmail);
+    }
+
+    /**
+     * OIDC is only usable when it is enabled and the mandatory provider settings are present.
+     */
+    public boolean isOidcConfigured() {
+        return isOidcEnabled()
+                && isNotBlank(getOidcIssuerUri())
+                && isNotBlank(getOidcClientId());
+    }
+
     public boolean isGettingStartedEnabled() {
         return getBoolean(KEY_GETTING_STARTED_ENABLED, DEFAULT_GETTING_STARTED_ENABLED);
     }
@@ -1404,7 +1561,7 @@ public class SettingsService {
 
     private static Set<String> splitLowerString(String s, String splitter) {
         //serial stream and linkedhashset because order matters
-        return Stream.of(s.split(splitter)).filter(x -> StringUtils.isNotBlank(x)).map(x -> x.toLowerCase()).collect(Collectors.toCollection(LinkedHashSet::new));
+        return Stream.of(s.split(splitter)).filter(x -> isNotBlank(x)).map(x -> x.toLowerCase()).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     public String getSmtpServer() {

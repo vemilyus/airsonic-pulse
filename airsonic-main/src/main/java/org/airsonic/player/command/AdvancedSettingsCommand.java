@@ -38,6 +38,21 @@ public class AdvancedSettingsCommand {
     private boolean ldapAutoShadowing;
     private String brand;
 
+    private boolean oidcEnabled;
+    private String oidcIssuerUri;
+    private String oidcClientId;
+    private String oidcClientSecret;
+    private String oidcScopes;
+    private String oidcUsernameClaim;
+    private String oidcButtonLabel;
+    private boolean oidcAutoCreateUsers;
+    private boolean oidcLinkByEmail;
+    private String oidcRequiredClaim;
+    private String oidcRequiredClaimValue;
+    private String oidcGroupsClaim;
+    private String oidcAdminGroup;
+    private String oidcRedirectUri;
+
     private String smtpServer;
     private String smtpEncryption;
     private String smtpPort;
@@ -111,6 +126,118 @@ public class AdvancedSettingsCommand {
 
     public void setLdapAutoShadowing(boolean ldapAutoShadowing) {
         this.ldapAutoShadowing = ldapAutoShadowing;
+    }
+
+    public boolean isOidcEnabled() {
+        return oidcEnabled;
+    }
+
+    public void setOidcEnabled(boolean oidcEnabled) {
+        this.oidcEnabled = oidcEnabled;
+    }
+
+    public String getOidcIssuerUri() {
+        return oidcIssuerUri;
+    }
+
+    public void setOidcIssuerUri(String oidcIssuerUri) {
+        this.oidcIssuerUri = oidcIssuerUri;
+    }
+
+    public String getOidcClientId() {
+        return oidcClientId;
+    }
+
+    public void setOidcClientId(String oidcClientId) {
+        this.oidcClientId = oidcClientId;
+    }
+
+    public String getOidcClientSecret() {
+        return oidcClientSecret;
+    }
+
+    public void setOidcClientSecret(String oidcClientSecret) {
+        this.oidcClientSecret = oidcClientSecret;
+    }
+
+    public String getOidcScopes() {
+        return oidcScopes;
+    }
+
+    public void setOidcScopes(String oidcScopes) {
+        this.oidcScopes = oidcScopes;
+    }
+
+    public String getOidcUsernameClaim() {
+        return oidcUsernameClaim;
+    }
+
+    public void setOidcUsernameClaim(String oidcUsernameClaim) {
+        this.oidcUsernameClaim = oidcUsernameClaim;
+    }
+
+    public String getOidcButtonLabel() {
+        return oidcButtonLabel;
+    }
+
+    public void setOidcButtonLabel(String oidcButtonLabel) {
+        this.oidcButtonLabel = oidcButtonLabel;
+    }
+
+    public boolean isOidcAutoCreateUsers() {
+        return oidcAutoCreateUsers;
+    }
+
+    public void setOidcAutoCreateUsers(boolean oidcAutoCreateUsers) {
+        this.oidcAutoCreateUsers = oidcAutoCreateUsers;
+    }
+
+    public boolean isOidcLinkByEmail() {
+        return oidcLinkByEmail;
+    }
+
+    public void setOidcLinkByEmail(boolean oidcLinkByEmail) {
+        this.oidcLinkByEmail = oidcLinkByEmail;
+    }
+
+    public String getOidcRequiredClaim() {
+        return oidcRequiredClaim;
+    }
+
+    public void setOidcRequiredClaim(String oidcRequiredClaim) {
+        this.oidcRequiredClaim = oidcRequiredClaim;
+    }
+
+    public String getOidcRequiredClaimValue() {
+        return oidcRequiredClaimValue;
+    }
+
+    public void setOidcRequiredClaimValue(String oidcRequiredClaimValue) {
+        this.oidcRequiredClaimValue = oidcRequiredClaimValue;
+    }
+
+    public String getOidcGroupsClaim() {
+        return oidcGroupsClaim;
+    }
+
+    public void setOidcGroupsClaim(String oidcGroupsClaim) {
+        this.oidcGroupsClaim = oidcGroupsClaim;
+    }
+
+    public String getOidcAdminGroup() {
+        return oidcAdminGroup;
+    }
+
+    public void setOidcAdminGroup(String oidcAdminGroup) {
+        this.oidcAdminGroup = oidcAdminGroup;
+    }
+
+    public String getOidcRedirectUri() {
+        return oidcRedirectUri;
+    }
+
+    public void setOidcRedirectUri(String oidcRedirectUri) {
+        this.oidcRedirectUri = oidcRedirectUri;
     }
 
     public void setBrand(String brand) {

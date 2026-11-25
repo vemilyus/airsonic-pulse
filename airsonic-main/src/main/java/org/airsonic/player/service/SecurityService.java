@@ -143,6 +143,10 @@ public class SecurityService implements UserDetailsService {
 
         Optional<User> user = userRepository.findByUsername(username);
         return user.map(u -> {
+            if (command != null && (command.getApp() == null || !command.getApp().isSecret())) {
+                LOG.warn("Can't create a generic credential for app {} and user {}", command.getApp(), username);
+                return false;
+            }
             try {
                 UserCredential userCredential = new UserCredential(
                         u,
@@ -198,6 +202,9 @@ public class SecurityService implements UserDetailsService {
                                     LOG.warn("Can't delete credential for user {}", username);
                                     failures.add(true);
                                 }
+                            } else if (dbCreds.getApp() != null && !dbCreds.getApp().isSecret()) {
+                                // identity links (e.g. OIDC) are only deletable, never re-encoded or edited
+                                LOG.debug("Skipping update of non-secret credential for user {}", username);
                             } else {
                                 if (dbCreds.updateEncoder(c.getEncoder(),
                                         reencodePlaintextNewCreds)) {
@@ -307,6 +314,169 @@ public class SecurityService implements UserDetailsService {
         return true;
     }
 
+    /**
+     * Finds the OIDC identity link for the given issuer and subject.
+     *
+     * @param issuer  the OIDC issuer
+     * @param subject the OIDC subject (sub claim)
+     * @return the link, if any
+     */
+    public Optional<UserCredential> getOidcCredential(String issuer, String subject) {
+        if (StringUtils.isAnyBlank(issuer, subject)) {
+            return Optional.empty();
+        }
+        return userCredentialRepository.findFirstByAppAndAppUsernameAndCredential(App.OIDC, issuer, subject);
+    }
+
+    /**
+     * Creates an OIDC identity link (issuer + subject) for an existing user. The subject is stored
+     * as is (no encoding) as it is an opaque identifier, not a secret.
+     *
+     * @param username the local user
+     * @param issuer   the OIDC issuer
+     * @param subject  the OIDC subject
+     * @param comment  a comment for the link
+     * @return true if the link was created
+     */
+    @Transactional
+    public boolean createOidcCredential(String username, String issuer, String subject, String comment) {
+        if (StringUtils.isAnyBlank(username, issuer, subject)) {
+            LOG.warn("Can't create an OIDC credential with blank username, issuer or subject");
+            return false;
+        }
+        if (getOidcCredential(issuer, subject).isPresent()) {
+            LOG.warn("An OIDC credential for subject at issuer {} already exists", issuer);
+            return false;
+        }
+        Optional<User> user = userRepository.findByUsername(username);
+        if (user.isEmpty()) {
+            LOG.warn("Can't create an OIDC credential for a non-existent user {}", username);
+            return false;
+        }
+        try {
+            userCredentialRepository.save(new UserCredential(user.get(), issuer, subject, "noop", App.OIDC, comment));
+            userCache.removeUser(username);
+            return true;
+        } catch (Exception e) {
+            LOG.warn("Can't create an OIDC credential for user {}", username, e);
+            return false;
+        }
+    }
+
+    /**
+     * Resolves the local user for an OIDC login. The required-claim gate must have been passed
+     * before calling this. Resolution order: existing OIDC link, link by verified email (if
+     * enabled), auto-creation (if enabled), otherwise no user.
+     *
+     * @param issuer  the OIDC issuer
+     * @param subject the OIDC subject
+     * @param claims  the merged ID token and UserInfo claims
+     * @return the local user, or empty if the login must be rejected
+     */
+    @Transactional
+    public Optional<User> resolveOidcUser(String issuer, String subject, Map<String, Object> claims) {
+        if (StringUtils.isAnyBlank(issuer, subject)) {
+            LOG.warn("OIDC login rejected: missing issuer or subject");
+            return Optional.empty();
+        }
+        Map<String, Object> safeClaims = claims == null ? Collections.emptyMap() : claims;
+
+        // (a) existing link
+        Optional<UserCredential> link = getOidcCredential(issuer, subject);
+        if (link.isPresent()) {
+            UserCredential uc = link.get();
+            if (uc.getExpiration() != null && !uc.getExpiration().isAfter(Instant.now())) {
+                LOG.warn("OIDC login rejected for subject '{}': the OIDC credential has expired", subject);
+                return Optional.empty();
+            }
+            return Optional.of(syncOidcGroupRoles(uc.getUser(), safeClaims));
+        }
+
+        String email = StringUtils.trimToNull(safeClaims.get("email") instanceof String s ? s : null);
+
+        // (b) link to an existing user by verified email
+        if (settingsService.isOidcLinkByEmail() && email != null && isEmailVerified(safeClaims)) {
+            List<User> candidates = userRepository.findAll().stream()
+                    .filter(u -> email.equalsIgnoreCase(u.getEmail())).toList();
+            if (candidates.size() == 1) {
+                User user = candidates.get(0);
+                if (createOidcCredential(user.getUsername(), issuer, subject, "OIDC link (by verified email)")) {
+                    LOG.info("Linked OIDC subject to existing user '{}' by verified email", user.getUsername());
+                    return Optional.of(syncOidcGroupRoles(user, safeClaims));
+                }
+                return Optional.empty();
+            } else if (candidates.size() > 1) {
+                LOG.warn("OIDC login rejected for subject '{}': email matches more than one local user", subject);
+                return Optional.empty();
+            }
+        }
+
+        // (c) auto-create
+        if (settingsService.isOidcAutoCreateUsers()) {
+            Object usernameClaim = safeClaims.get(settingsService.getOidcUsernameClaim());
+            String username = usernameClaim instanceof String s ? StringUtils.trimToNull(s) : null;
+            if (username == null) {
+                LOG.warn("OIDC login rejected for subject '{}': username claim '{}' is missing", subject,
+                        settingsService.getOidcUsernameClaim());
+                return Optional.empty();
+            }
+            if (userRepository.findByUsername(username).isPresent()) {
+                LOG.warn("OIDC login rejected for subject '{}': a local user '{}' exists and is not linked", subject,
+                        username);
+                return Optional.empty();
+            }
+
+            Set<Role> roles = new HashSet<>(Set.of(Role.STREAM, Role.SETTINGS));
+            if (isOidcAdminGroupMember(safeClaims)) {
+                roles.add(Role.ADMIN);
+            }
+            User newUser = new User(username, email, false, 0L, 0L, 0L, roles);
+            newUser.setPasswordAuthEnabled(false);
+            // no usable password: random secret that is never disclosed
+            RandomStringGenerator generator = new RandomStringGenerator.Builder().withinRange('0', 'z')
+                    .filteredBy(Character::isLetterOrDigit).get();
+            createUser(newUser, generator.generate(40), "Autogenerated for new OIDC user");
+            if (!createOidcCredential(username, issuer, subject, "OIDC link (auto-created)")) {
+                throw new IllegalStateException("Could not link the new OIDC user " + username);
+            }
+            userCache.removeUser(username);
+            LOG.info("Created local user '{}' for OIDC subject", username);
+            return userRepository.findByUsername(username);
+        }
+
+        // (d) reject
+        LOG.warn("OIDC login rejected for subject '{}': no linked user and provisioning not applicable", subject);
+        return Optional.empty();
+    }
+
+    private static boolean isEmailVerified(Map<String, Object> claims) {
+        Object verified = claims.get("email_verified");
+        return Boolean.TRUE.equals(verified) || (verified instanceof String s && "true".equalsIgnoreCase(s));
+    }
+
+    private boolean isOidcAdminGroupMember(Map<String, Object> claims) {
+        String groupsClaim = settingsService.getOidcGroupsClaim();
+        String adminGroup = settingsService.getOidcAdminGroup();
+        return StringUtils.isNotBlank(groupsClaim) && StringUtils.isNotEmpty(adminGroup)
+                && org.airsonic.player.security.OidcClaimMatcher.matches(claims, groupsClaim, adminGroup);
+    }
+
+    /**
+     * Grants the admin role to members of the configured OIDC admin group. Roles are only ever added
+     * by this mapping, never removed.
+     */
+    private User syncOidcGroupRoles(User user, Map<String, Object> claims) {
+        if (!user.isAdminRole() && isOidcAdminGroupMember(claims)) {
+            Set<Role> roles = new HashSet<>(user.getRoles());
+            roles.add(Role.ADMIN);
+            user.setRoles(roles);
+            userRepository.save(user);
+            userCache.removeUser(user.getUsername());
+            LOG.info("Granted admin role to user '{}' through OIDC group mapping", user.getUsername());
+        }
+        return user;
+    }
+
     public List<UserCredential> getCredentials(String username, App... apps) {
         return userRepository.findByUsername(username).map(user -> {
             return userCredentialRepository.findByUserAndAppIn(user, List.of(apps));
@@ -332,7 +502,7 @@ public class SecurityService implements UserDetailsService {
     }
 
     public boolean checkOpenCredsPresent() {
-        return userCredentialRepository.existsByEncoderIn(PasswordEncoderConfig.OPENTEXT_ENCODERS);
+        return userCredentialRepository.existsByEncoderInAndAppNot(PasswordEncoderConfig.OPENTEXT_ENCODERS, App.OIDC);
     }
 
     public boolean checkLegacyCredsPresent() {
@@ -354,6 +524,9 @@ public class SecurityService implements UserDetailsService {
         List<UserCredential> failures = new ArrayList<>();
 
         userCredentialRepository.findByEncoderStartsWith("legacy").forEach(c -> {
+            if (c.getApp() != null && !c.getApp().isSecret()) {
+                return;
+            }
             c.setComment(c.getComment() + " | Migrated to nonlegacy by admin");
             String encoder = App.AIRSONIC == c.getApp() ? nonDecodableEncoder : decodableEncoder;
             if (c.updateEncoder(encoder, false)) {
@@ -457,7 +630,7 @@ public class SecurityService implements UserDetailsService {
      * Increment the number of bytes downloaded by the given user.
      *
      * @param username             user name.
-     * @param deltaBytesDownloaded number of bytes downloaded.
+     * @param deltaBytesStreamed number of bytes downloaded.
      * @return updated user.
      */
     // TODO: This is not security related. Move to a different service.
@@ -475,7 +648,7 @@ public class SecurityService implements UserDetailsService {
      * Increment the number of bytes streamed by the given user.
      *
      * @param username           user name.
-     * @param deltaBytesStreamed number of bytes streamed.
+     * @param deltaBytesDownloaded number of bytes streamed.
      * @return updated user.
      */
     // TODO: This is not security related. Move to a different service.

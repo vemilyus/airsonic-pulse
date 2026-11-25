@@ -240,6 +240,10 @@ public class UserCredential {
      */
     public boolean updateEncoder(String newEncoder, boolean reencodePlaintextNewCreds) {
 
+        if (this.app != null && !this.app.isSecret()) {
+            // identity links are never encoded or re-encoded
+            return true;
+        }
         if (!StringUtils.hasLength(this.encoder) || !StringUtils.hasLength(newEncoder)) {
             return false;
         }
@@ -269,16 +273,35 @@ public class UserCredential {
         AIRSONIC("Airsonic", false, true),
         LASTFM("Last.fm", true, false),
         LISTENBRAINZ("Listenbrainz", false, false),
-        PODCASTINDEX("Podcast Index", true, false);
+        PODCASTINDEX("Podcast Index", true, false),
+        /**
+         * OpenID Connect identity link: appUsername is the issuer, credential is the opaque
+         * subject. Not a secret, never encoded, never usable as a password.
+         */
+        OIDC("OpenID Connect", false, false, false);
 
         private final String name;
         private final boolean usernameRequired;
         private final boolean nonDecodableEncodersAllowed;
+        private final boolean secret;
 
         private App(String name, boolean usernameRequired, boolean nonDecodableEncodersAllowed) {
+            this(name, usernameRequired, nonDecodableEncodersAllowed, true);
+        }
+
+        private App(String name, boolean usernameRequired, boolean nonDecodableEncodersAllowed, boolean secret) {
             this.name = name;
             this.usernameRequired = usernameRequired;
             this.nonDecodableEncodersAllowed = nonDecodableEncodersAllowed;
+            this.secret = secret;
+        }
+
+        /**
+         * @return true if the credential holds a secret that is encoded and managed like a
+         *         password/token, false for identity links such as OIDC
+         */
+        public boolean isSecret() {
+            return secret;
         }
 
         public String getName() {

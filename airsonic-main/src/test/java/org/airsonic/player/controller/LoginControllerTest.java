@@ -18,6 +18,7 @@
  */
 package org.airsonic.player.controller;
 
+import org.airsonic.player.security.OidcClientRegistrationHolder;
 import org.airsonic.player.service.SecurityService;
 import org.airsonic.player.service.SettingsService;
 import org.airsonic.player.service.VersionService;
@@ -57,6 +58,8 @@ class LoginControllerTest {
     private SettingsService settingsService;
     @Mock
     private VersionService versionService;
+    @Mock
+    private OidcClientRegistrationHolder oidcClientRegistrations;
 
     @InjectMocks
     private LoginController controller;
@@ -89,6 +92,22 @@ class LoginControllerTest {
         assertNull(model.get("displayVersion"));
         // the version is not merely hidden by the template — it is never read from the service
         verify(versionService, never()).getDisplayVersion();
+    }
+
+    @Test
+    void modelOffersSsoOnlyWhenOidcIsActive() {
+        when(oidcClientRegistrations.isAvailable()).thenReturn(false);
+        Map<String, Object> off = loginModel();
+        assertEquals(false, off.get("oidcEnabled"));
+        assertNull(off.get("oidcLabel"));
+        assertNull(off.get("oidcUrl"));
+
+        when(oidcClientRegistrations.isAvailable()).thenReturn(true);
+        when(settingsService.getOidcButtonLabel()).thenReturn("Keycloak");
+        Map<String, Object> on = loginModel();
+        assertEquals(true, on.get("oidcEnabled"));
+        assertEquals("Keycloak", on.get("oidcLabel"));
+        assertEquals("/oauth2/authorization/airsonic", on.get("oidcUrl"));
     }
 
     @Test

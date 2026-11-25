@@ -89,6 +89,15 @@ public class UserSettingsValidator implements Validator {
             errors.rejectValue("password", "usersettings.passwordnotsupportedforldap");
         }
 
+        String oidcSubject = StringUtils.trimToNull(command.getOidcSubject());
+        if (oidcSubject != null) {
+            if (!settingsService.isOidcConfigured()) {
+                errors.rejectValue("oidcSubject", "usersettings.oidcdisabled");
+            } else if (securityService.getOidcCredential(settingsService.getOidcIssuerUri().trim(), oidcSubject).isPresent()) {
+                errors.rejectValue("oidcSubject", "usersettings.oidcalreadylinked");
+            }
+        }
+
         if (securityService.getCurrentUser(request).getUsername().equals(username)) {
             // These errors don't need translation since the option isn't exposed to the user
             if (command.isDeleteUser()) {

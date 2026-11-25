@@ -28,7 +28,11 @@
 
             <input name="submit" type="submit" th:value="#{login.login}" tabindex="4">
 
-            <div class="details">
+            <div class="detail" th:if="${model.oidcEnabled}">
+                <a id="oidc-login" th:href="@{${model.oidcUrl}}" th:text="#{login.oidc(${model.oidcLabel})}">Sign in with SSO</a>
+            </div>
+
+            <div class="detail">
                 <div id="loginremember">
                     <label for="remember" th:text="#{login.remember}">Remember</label>
                     <input type="checkbox" name="remember-me" id="remember" tabindex="3">

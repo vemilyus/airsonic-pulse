@@ -92,6 +92,11 @@ public class CredentialsManagementValidators {
                 return true;
             }
 
+            if (!creds.getApp().isSecret()) {
+                // identity links (e.g. OIDC) cannot be created through the generic credential form
+                return false;
+            }
+
             boolean valid = true;
             if (!creds.getApp().getNonDecodableEncodersAllowed()) {
                 valid = !PasswordEncoderConfig.NONLEGACY_NONDECODABLE_ENCODERS.contains(creds.getEncoder());

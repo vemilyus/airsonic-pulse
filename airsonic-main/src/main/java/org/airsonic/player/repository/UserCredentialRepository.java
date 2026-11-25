@@ -6,6 +6,7 @@ import org.airsonic.player.domain.UserCredential.App;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface UserCredentialRepository extends JpaRepository<UserCredential, Integer> {
 
@@ -20,5 +21,10 @@ public interface UserCredentialRepository extends JpaRepository<UserCredential, 
     boolean existsByEncoderStartsWith(String encoder);
 
     boolean existsByEncoderIn(Iterable<String> encoders);
+
+    boolean existsByEncoderInAndAppNot(Iterable<String> encoders, App app);
+
+    Optional<UserCredential> findFirstByAppAndAppUsernameAndCredential(App app, String appUsername,
+            String credential);
 
 }
