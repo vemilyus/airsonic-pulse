@@ -262,6 +262,102 @@ public class SecurityServiceTest {
     }
 
     // ---------------------------------------------------------------------------------------
+    // OIDC identity links (App.OIDC) must never take part in password handling.
+    // ---------------------------------------------------------------------------------------
+
+    private static final String OIDC_ISSUER = "https://idp.example.com/realms/test";
+
+    @Test
+    public void createOidcCredentialStoresIssuerAndSubjectUnencoded() {
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-1", "OIDC link"));
+
+        UserCredential uc = securityService.getOidcCredential(OIDC_ISSUER, "subject-1").orElseThrow();
+        assertEquals(App.OIDC, uc.getApp());
+        assertEquals(OIDC_ISSUER, uc.getAppUsername());
+        assertEquals("subject-1", uc.getCredential());
+        assertEquals(TEST_USER_NAME, uc.getUser().getUsername());
+        assertFalse(App.OIDC.isSecret());
+    }
+
+    @Test
+    public void getOidcCredentialUnknownOrWrongIssuerIsEmpty() {
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-2", null));
+
+        assertTrue(securityService.getOidcCredential(OIDC_ISSUER, "other").isEmpty());
+        assertTrue(securityService.getOidcCredential("https://other", "subject-2").isEmpty());
+        assertTrue(securityService.getOidcCredential(null, "subject-2").isEmpty());
+        assertTrue(securityService.getOidcCredential(OIDC_ISSUER, " ").isEmpty());
+    }
+
+    @Test
+    public void createOidcCredentialRejectsDuplicatesAndUnknownUsers() {
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-3", null));
+        assertFalse(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-3", null));
+        assertFalse(securityService.createOidcCredential("nonExistingUser", OIDC_ISSUER, "subject-4", null));
+        assertFalse(securityService.createOidcCredential(TEST_USER_NAME, "", "subject-4", null));
+    }
+
+    @Test
+    public void createCredentialRefusesOidcApp() {
+        CredentialsCommand command = new CredentialsCommand();
+        command.setEncoder("hex");
+        command.setCredential("x");
+        command.setApp(App.OIDC);
+
+        assertFalse(securityService.createCredential(TEST_USER_NAME, command, "c"));
+        assertTrue(userCredentialRepository.findByUserUsernameAndApp(TEST_USER_NAME, App.OIDC).isEmpty());
+    }
+
+    @Test
+    public void updateCredentialsDoesNotReencodeOidcRowsButAllowsDeletion() {
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-5", "keep"));
+        UserCredential uc = securityService.getOidcCredential(OIDC_ISSUER, "subject-5").orElseThrow();
+
+        when(mockedCredentialsCommand.getHash()).thenReturn(Integer.toString(uc.hashCode()));
+        when(mockedCredentialsCommand.getMarkedForDeletion()).thenReturn(false);
+        CredentialsManagementCommand command = new CredentialsManagementCommand(List.of(mockedCredentialsCommand));
+
+        assertTrue(securityService.updateCredentials(TEST_USER_NAME, command, "changed", true));
+        UserCredential unchanged = securityService.getOidcCredential(OIDC_ISSUER, "subject-5").orElseThrow();
+        assertEquals("subject-5", unchanged.getCredential());
+        assertEquals("noop", unchanged.getEncoder());
+        assertEquals("keep", unchanged.getComment());
+
+        when(mockedCredentialsCommand.getMarkedForDeletion()).thenReturn(true);
+        assertTrue(securityService.updateCredentials(TEST_USER_NAME, command, "changed", false));
+        assertTrue(securityService.getOidcCredential(OIDC_ISSUER, "subject-5").isEmpty());
+    }
+
+    @Test
+    public void oidcRowsAreNotReportedAsOpenTextCredentials() {
+        boolean before = securityService.checkOpenCredsPresent();
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-6", null));
+
+        assertEquals(before, securityService.checkOpenCredsPresent());
+    }
+
+    @Test
+    public void oidcRowsDoNotCountAsAirsonicCredentialsAndAreNotPasswords() {
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-7", null));
+
+        assertTrue(securityService.getCredentials(TEST_USER_NAME, App.AIRSONIC).isEmpty());
+        assertTrue(securityService.getDecodableCredsForApps(TEST_USER_NAME, App.LASTFM).isEmpty());
+        // loadUserByUsername only exposes AIRSONIC credentials as password material
+        assertTrue(((SecurityService.UserDetail) securityService.loadUserByUsername(TEST_USER_NAME))
+                .getCredentials().isEmpty());
+    }
+
+    @Test
+    public void deleteLastAirsonicCredentialGuardIgnoresOidcRows() {
+        UserCredential airsonic = new UserCredential(testUser, TEST_USER_NAME,
+                PasswordEncoderConfig.ENCODERS.get("hex").encode("testPassword"), "hex", App.AIRSONIC);
+        userCredentialRepository.saveAndFlush(airsonic);
+        assertTrue(securityService.createOidcCredential(TEST_USER_NAME, OIDC_ISSUER, "subject-8", null));
+
+        assertFalse(securityService.deleteCredential(airsonic));
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Per-user password_auth_enabled write paths (#278). getUserByName is UserCache-backed; the
     // observable proof of correct eviction is that a cache-primed read returns the new value
     // immediately after a write.

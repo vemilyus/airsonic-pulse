@@ -85,7 +85,8 @@ public class CredentialsManagementController {
         // for new creds
         map.addAttribute("newCreds", new CredentialsCommand());
 
-        map.addAttribute("apps", EnumSet.allOf(App.class));
+        // identity links such as OIDC cannot be created through the generic credential dialog
+        map.addAttribute("apps", EnumSet.allOf(App.class).stream().filter(App::isSecret).toList());
         map.addAttribute("appsMap", EnumSet.allOf(App.class).stream().collect(toMap(a -> a, a -> new BeanMap(a))));
 
         map.addAttribute("decodableEncoders", PasswordEncoderConfig.NONLEGACY_DECODABLE_ENCODERS);
@@ -95,6 +96,7 @@ public class CredentialsManagementController {
         map.addAttribute("preferredEncoderNonDecodableAllowed", securityService.getPreferredPasswordEncoder(true));
         map.addAttribute("preferredEncoderDecodableOnly", securityService.getPreferredPasswordEncoder(false));
 
+        map.addAttribute("oidcLinksPresent", creds.stream().anyMatch(c -> c.getApp() == App.OIDC));
         map.addAttribute("ldapAuthEnabledForUser", userInDb.isLdapAuthenticated());
         map.addAttribute("passwordAuthEnabledForUser", userInDb.isPasswordAuthEnabled());
         map.addAttribute("adminRole", userInDb.isAdminRole());

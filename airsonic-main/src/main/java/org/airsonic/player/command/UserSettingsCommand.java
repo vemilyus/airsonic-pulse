@@ -25,6 +25,7 @@ import org.airsonic.player.domain.TranscodeScheme;
 import org.airsonic.player.domain.User;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Command used in {@link UserSettingsController}.
@@ -56,6 +57,11 @@ public class UserSettingsCommand {
     private boolean isLdapAuthenticated;
     private boolean passwordAuthEnabled = true;
     private boolean isLdapEnabled;
+    private boolean oidcEnabled;
+    private String oidcIssuer;
+    private String oidcSubject;
+    private Map<Integer, String> oidcLinks;
+    private Integer[] oidcRemoveIds;
     private List<MusicFolder> allMusicFolders;
     private int[] allowedMusicFolderIds;
 
@@ -246,6 +252,46 @@ public class UserSettingsCommand {
 
     public void setLdapEnabled(boolean ldapEnabled) {
         isLdapEnabled = ldapEnabled;
+    }
+
+    public boolean isOidcEnabled() {
+        return oidcEnabled;
+    }
+
+    public void setOidcEnabled(boolean oidcEnabled) {
+        this.oidcEnabled = oidcEnabled;
+    }
+
+    public String getOidcIssuer() {
+        return oidcIssuer;
+    }
+
+    public void setOidcIssuer(String oidcIssuer) {
+        this.oidcIssuer = oidcIssuer;
+    }
+
+    public String getOidcSubject() {
+        return oidcSubject;
+    }
+
+    public void setOidcSubject(String oidcSubject) {
+        this.oidcSubject = oidcSubject;
+    }
+
+    public Map<Integer, String> getOidcLinks() {
+        return oidcLinks;
+    }
+
+    public void setOidcLinks(Map<Integer, String> oidcLinks) {
+        this.oidcLinks = oidcLinks;
+    }
+
+    public Integer[] getOidcRemoveIds() {
+        return oidcRemoveIds;
+    }
+
+    public void setOidcRemoveIds(Integer[] oidcRemoveIds) {
+        this.oidcRemoveIds = oidcRemoveIds;
     }
 
     public List<MusicFolder> getAllMusicFolders() {

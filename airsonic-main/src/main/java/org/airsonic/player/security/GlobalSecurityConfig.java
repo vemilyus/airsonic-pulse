@@ -24,6 +24,8 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
@@ -66,6 +68,12 @@ public class GlobalSecurityConfig {
 
     @Autowired
     private LegacyAuthWarningCache legacyAuthWarningCache;
+
+    @Autowired
+    private OidcClientRegistrationHolder oidcClientRegistrations;
+
+    @Autowired
+    private AirsonicOidcUserService airsonicOidcUserService;
 
     @EventListener
     public void loginFailureListener(AbstractAuthenticationFailureEvent event) {
@@ -173,6 +181,8 @@ public class GlobalSecurityConfig {
             LOG.info("Using a fixed 'remember me' key from properties, this is insecure.");
         }
 
+        boolean oidcEnabled = oidcClientRegistrations.isAvailable();
+
         http
             .cors((cors) -> cors.configurationSource(corsConfigurationSource()))
             //.addFilterBefore(restAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -181,7 +191,11 @@ public class GlobalSecurityConfig {
             .addFilterBefore(apiKeyFilter, RESTRequestParameterProcessingFilter.class)
             .csrf(csrf -> csrf.ignoringRequestMatchers("/ws/Sonos/**").requireCsrfProtectionMatcher(csrfSecurityRequestMatcher))
             .headers(header -> header.frameOptions(fo -> fo.sameOrigin()))
-            .authorizeHttpRequests((authorize) -> authorize.requestMatchers("/recover*", "/accessDenied*", "/style/**", "/icons/**", "/flash/**", "/script/**",
+            .authorizeHttpRequests((authorize) -> {
+                if (oidcEnabled) {
+                    authorize.requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll();
+                }
+                authorize.requestMatchers("/recover*", "/accessDenied*", "/style/**", "/icons/**", "/flash/**", "/script/**",
                     "/login", "/error", "/sonos/**", "/sonoslink/**", "/ws/Sonos/**",
                     "/rest/getOpenSubsonicExtensions*").permitAll().requestMatchers("/personalSettings*",
                     "/playerSettings*", "/shareSettings*", "/credentialsSettings*", "/apikeySettings*",
@@ -192,7 +206,8 @@ public class GlobalSecurityConfig {
                     .requestMatchers("/upload*").hasRole("UPLOAD").requestMatchers("/createShare*").hasRole("SHARE")
                     .requestMatchers("/changeCoverArt*", "/editTags*", "/editMediaDir*").hasRole("COVERART").requestMatchers("/setMusicFileInfo*").hasRole("COMMENT")
                     .requestMatchers("/podcastReceiverAdmin*", "/podcastEpisodes*").hasRole("PODCAST")
-                    .requestMatchers("/**").hasRole("USER").anyRequest().authenticated())
+                    .requestMatchers("/**").hasRole("USER").anyRequest().authenticated();
+            })
             .formLogin((login) -> login
                     .loginPage("/login")
                     .permitAll()
@@ -208,6 +223,21 @@ public class GlobalSecurityConfig {
             .rememberMe((rememberMe) -> rememberMe
                 .key(rememberMeKey)
                 .userDetailsService(securityService));
+
+        if (oidcEnabled) {
+            DefaultOAuth2AuthorizationRequestResolver authorizationRequestResolver =
+                    new DefaultOAuth2AuthorizationRequestResolver(oidcClientRegistrations.getRepository(),
+                            OidcSecurityConfig.AUTHORIZATION_BASE_URI);
+            // PKCE for all clients, not only public ones
+            authorizationRequestResolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
+            http.oauth2Login(oauth2 -> oauth2
+                    .clientRegistrationRepository(oidcClientRegistrations.getRepository())
+                    .loginPage("/login")
+                    .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(authorizationRequestResolver))
+                    .userInfoEndpoint(userInfo -> userInfo.oidcUserService(airsonicOidcUserService))
+                    .failureUrl(FAILURE_URL)
+                    .defaultSuccessUrl("/index", true));
+        }
         return http.build();
     }
 

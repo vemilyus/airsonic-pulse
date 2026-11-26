@@ -25,6 +25,7 @@ import org.airsonic.player.domain.MusicFolder;
 import org.airsonic.player.domain.MusicFolder.Type;
 import org.airsonic.player.domain.TranscodeScheme;
 import org.airsonic.player.domain.User;
+import org.airsonic.player.domain.UserCredential.App;
 import org.airsonic.player.domain.UserSettings;
 import org.airsonic.player.service.MediaFolderService;
 import org.airsonic.player.service.PersonalSettingsService;
@@ -57,7 +58,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static java.util.stream.Collectors.toSet;
@@ -121,6 +124,14 @@ public class UserSettingsController {
         command.setTranscodeDirectory(homeConfig.getTranscodeDirectory().toString());
         command.setTranscodeSchemes(TranscodeScheme.values());
         command.setLdapEnabled(settingsService.isLdapEnabled());
+        command.setOidcEnabled(settingsService.isOidcConfigured());
+        command.setOidcIssuer(StringUtils.trimToNull(settingsService.getOidcIssuerUri()));
+        Map<Integer, String> oidcLinks = new LinkedHashMap<>();
+        if (!command.isNewUser() && StringUtils.isNotBlank(command.getUsername())) {
+            securityService.getCredentials(command.getUsername(), App.OIDC)
+                    .forEach(c -> oidcLinks.put(c.getId(), c.getAppUsername() + " | " + c.getCredential()));
+        }
+        command.setOidcLinks(oidcLinks);
         command.setAllMusicFolders(mediaFolderService.getAllMusicFolders());
         model.addAttribute("command", command);
         return "userSettings";
@@ -197,6 +208,28 @@ public class UserSettingsController {
         updateUser(command);
     }
 
+    /**
+     * Admin pre-link: removes selected OIDC links of the edited user (never of another user) and adds
+     * a link for the entered subject at the configured issuer.
+     */
+    private void updateOidcLinks(UserSettingsCommand command) {
+        String username = command.getUsername();
+
+        Integer[] removeIds = command.getOidcRemoveIds();
+        if (removeIds != null && removeIds.length > 0) {
+            Set<Integer> remove = new HashSet<>(Arrays.asList(removeIds));
+            securityService.getCredentials(username, App.OIDC).stream()
+                    .filter(c -> remove.contains(c.getId()))
+                    .forEach(securityService::deleteCredential);
+        }
+
+        String subject = StringUtils.trimToNull(command.getOidcSubject());
+        if (subject != null && settingsService.isOidcConfigured()) {
+            securityService.createOidcCredential(username, settingsService.getOidcIssuerUri().trim(), subject,
+                    "OIDC link (pre-linked by admin)");
+        }
+    }
+
     public void updateUser(UserSettingsCommand command) {
         User user = securityService.updateUserByUserSettingsCommand(command);
 
@@ -204,6 +237,8 @@ public class UserSettingsController {
             LOG.warn("User {} not found", command.getUsername());
             return;
         }
+
+        updateOidcLinks(command);
 
         Set<Integer> allowedMusicFolderIds = new HashSet<>();
         if (command.isPodcastRole()) {

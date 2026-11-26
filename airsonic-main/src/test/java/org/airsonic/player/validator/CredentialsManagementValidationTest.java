@@ -92,6 +92,14 @@ public class CredentialsManagementValidationTest {
     }
 
     @Test
+    public void credCreation_oidcNotAllowed() {
+        CredentialsCommand cc = new CredentialsCommand("username", "noop", App.OIDC, null, null, null, null, null);
+        cc.setCredential("c");
+        cc.setConfirmCredential("c");
+        assertThat(v.validate(cc, Default.class, CredentialCreateChecks.class)).isNotEmpty();
+    }
+
+    @Test
     public void credUpdate_correct() {
         CredentialsCommand cc = new CredentialsCommand(null, "bcrypt", null, null, null, null, null, "hash");
         assertThat(v.validate(cc, Default.class, CredentialUpdateChecks.class)).isEmpty();

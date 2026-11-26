@@ -19,8 +19,9 @@
  */
 package org.airsonic.player.domain;
 
-import org.airsonic.player.repository.RolesConverter;
 import org.airsonic.player.util.Util;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.*;
 
@@ -71,7 +72,7 @@ public class User {
     private long bytesUploaded;
 
     @Column(name = "roles")
-    @Convert(converter = RolesConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     private Set<Role> roles = new HashSet<>();
 
     // TODO: change fetch type to LAZY

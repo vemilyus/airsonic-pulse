@@ -20,6 +20,7 @@
 package org.airsonic.player.controller;
 
 import org.airsonic.player.command.AdvancedSettingsCommand;
+import org.airsonic.player.security.OidcSecurityConfig;
 import org.airsonic.player.service.SettingsService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Controller for the page used to administrate advanced settings.
@@ -54,6 +56,22 @@ public class AdvancedSettingsController {
         command.setLdapManagerDn(settingsService.getLdapManagerDn());
         command.setLdapAutoShadowing(settingsService.isLdapAutoShadowing());
         command.setBrand(settingsService.getBrand());
+
+        command.setOidcEnabled(settingsService.isOidcEnabled());
+        command.setOidcIssuerUri(settingsService.getOidcIssuerUri());
+        command.setOidcClientId(settingsService.getOidcClientId());
+        // the client secret is never sent to the UI
+        command.setOidcScopes(settingsService.getOidcScopes());
+        command.setOidcUsernameClaim(settingsService.getOidcUsernameClaim());
+        command.setOidcButtonLabel(settingsService.getOidcButtonLabel());
+        command.setOidcAutoCreateUsers(settingsService.isOidcAutoCreateUsers());
+        command.setOidcLinkByEmail(settingsService.isOidcLinkByEmail());
+        command.setOidcRequiredClaim(settingsService.getOidcRequiredClaim());
+        command.setOidcRequiredClaimValue(settingsService.getOidcRequiredClaimValue());
+        command.setOidcGroupsClaim(settingsService.getOidcGroupsClaim());
+        command.setOidcAdminGroup(settingsService.getOidcAdminGroup());
+        command.setOidcRedirectUri(ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/login/oauth2/code/" + OidcSecurityConfig.REGISTRATION_ID).toUriString());
 
         command.setSmtpServer(settingsService.getSmtpServer());
         command.setSmtpEncryption(settingsService.getSmtpEncryption());
@@ -89,6 +107,23 @@ public class AdvancedSettingsController {
         if (StringUtils.isNotEmpty(command.getLdapManagerPassword())) {
             settingsService.setLdapManagerPassword(command.getLdapManagerPassword());
         }
+
+        settingsService.setOidcEnabled(command.isOidcEnabled());
+        settingsService.setOidcIssuerUri(StringUtils.trimToNull(command.getOidcIssuerUri()));
+        settingsService.setOidcClientId(StringUtils.trimToNull(command.getOidcClientId()));
+        if (StringUtils.isNotEmpty(command.getOidcClientSecret())) {
+            settingsService.setOidcClientSecret(command.getOidcClientSecret());
+        }
+        // blank values clear the key so that the default applies
+        settingsService.setOidcScopes(StringUtils.trimToNull(command.getOidcScopes()));
+        settingsService.setOidcUsernameClaim(StringUtils.trimToNull(command.getOidcUsernameClaim()));
+        settingsService.setOidcButtonLabel(StringUtils.trimToNull(command.getOidcButtonLabel()));
+        settingsService.setOidcAutoCreateUsers(command.isOidcAutoCreateUsers());
+        settingsService.setOidcLinkByEmail(command.isOidcLinkByEmail());
+        settingsService.setOidcRequiredClaim(StringUtils.trimToNull(command.getOidcRequiredClaim()));
+        settingsService.setOidcRequiredClaimValue(StringUtils.trimToNull(command.getOidcRequiredClaimValue()));
+        settingsService.setOidcGroupsClaim(StringUtils.trimToNull(command.getOidcGroupsClaim()));
+        settingsService.setOidcAdminGroup(StringUtils.trimToNull(command.getOidcAdminGroup()));
 
         settingsService.setSmtpServer(command.getSmtpServer());
         settingsService.setSmtpEncryption(command.getSmtpEncryption());

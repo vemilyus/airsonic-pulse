@@ -4,6 +4,8 @@ import org.airsonic.player.command.UserSettingsCommand;
 import org.airsonic.player.config.AirsonicHomeConfig;
 import org.airsonic.player.domain.TranscodeScheme;
 import org.airsonic.player.domain.User;
+import org.airsonic.player.domain.UserCredential;
+import org.airsonic.player.domain.UserCredential.App;
 import org.airsonic.player.domain.UserSettings;
 import org.airsonic.player.service.MediaFolderService;
 import org.airsonic.player.service.PersonalSettingsService;
@@ -26,6 +28,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -121,5 +124,63 @@ public class UserSettingsControllerTest {
         // Then the update succeeds
         assertDoesNotThrow(() -> userSettingsController.updateUser(command));
         verify(mediaFolderService).setMusicFoldersForUser(eq("test"), eq(Collections.emptySet()));
+    }
+
+    private UserSettingsCommand oidcCommand(User user) {
+        final UserSettingsCommand command = new UserSettingsCommand();
+        command.setUsername(user.getUsername());
+        command.setUser(user);
+        command.setTranscodeSchemeName(TranscodeScheme.OFF.name());
+        command.setStreamRole(true);
+        when(securityService.updateUserByUserSettingsCommand(command)).thenReturn(user);
+        when(personalSettingsService.getUserSettings(user.getUsername())).thenReturn(new UserSettings());
+        return command;
+    }
+
+    @Test
+    void testAdminCanPreLinkOidcSubjectAtConfiguredIssuer() {
+        final User user = new User("test", "test@example.com");
+        final UserSettingsCommand command = oidcCommand(user);
+        when(settingsService.isOidcConfigured()).thenReturn(true);
+        when(settingsService.getOidcIssuerUri()).thenReturn(" https://idp.example.com/realms/main ");
+        command.setOidcSubject(" subject-1 ");
+
+        userSettingsController.updateUser(command);
+
+        verify(securityService).createOidcCredential("test", "https://idp.example.com/realms/main", "subject-1",
+                "OIDC link (pre-linked by admin)");
+    }
+
+    @Test
+    void testNoPreLinkWithoutSubjectOrWhenOidcIsNotConfigured() {
+        final User user = new User("test", "test@example.com");
+        final UserSettingsCommand command = oidcCommand(user);
+        when(settingsService.isOidcConfigured()).thenReturn(true);
+        command.setOidcSubject("  ");
+        userSettingsController.updateUser(command);
+
+        when(settingsService.isOidcConfigured()).thenReturn(false);
+        command.setOidcSubject("subject-1");
+        userSettingsController.updateUser(command);
+
+        verify(securityService, never()).createOidcCredential(any(), any(), any(), any());
+    }
+
+    @Test
+    void testAdminCanRemoveOnlySelectedOidcLinksOfTheEditedUser() {
+        final User user = new User("test", "test@example.com");
+        final UserSettingsCommand command = oidcCommand(user);
+        UserCredential keep = new UserCredential(user, "https://idp", "keep", "noop", App.OIDC);
+        keep.setId(1);
+        UserCredential drop = new UserCredential(user, "https://idp", "drop", "noop", App.OIDC);
+        drop.setId(2);
+        when(securityService.getCredentials("test", App.OIDC)).thenReturn(List.of(keep, drop));
+        // id 99 belongs to somebody else and must be ignored
+        command.setOidcRemoveIds(new Integer[] { 2, 2, 99 });
+
+        userSettingsController.updateUser(command);
+
+        verify(securityService).deleteCredential(drop);
+        verify(securityService, never()).deleteCredential(keep);
     }
 }

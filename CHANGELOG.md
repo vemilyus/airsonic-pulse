@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- OpenID Connect (OIDC) single sign-on for the web interface, configurable through environment variables, `airsonic.properties` and *Settings > Advanced* like LDAP. Authorization code flow with PKCE, discovery through the issuer URI, "Sign in with ..." button on the login page. See `docs/configuration/oidc.md`
+- OIDC identities are stored as credentials of the new `OpenID Connect` type: visible and revocable on the Credentials page, expirable, and pre-linkable by an administrator in user settings
+- Optional provisioning of OIDC users: automatic creation, linking by verified email, admin group to admin role mapping
+- Configurable access restriction for OIDC sign-in: a claim (dot paths supported) must contain a given value, checked on every sign-in
+
 ## [13.0.0] — 2026-04-29
 
 ### Breaking
